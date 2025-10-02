@@ -1,0 +1,199 @@
+name: release
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-release
+  cancel-in-progress: false
+
+jobs:
+  build-pin-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+
+      - name: Read manifest fields
+        id: mf
+        run: |
+          TITLE=$(jq -r .title manifest.master.json)
+          DESC=$(jq -r .description manifest.master.json)
+          VER=$(jq -r .version manifest.master.json)
+          WEB=$(jq -r .links.web manifest.master.json)
+          KEYWORDS=$(jq -r '.keywords | join(", ")' manifest.master.json)
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+          echo "desc=$DESC" >> $GITHUB_OUTPUT
+          echo "ver=$VER" >> $GITHUB_OUTPUT
+          echo "web=$WEB" >> $GITHUB_OUTPUT
+          echo "keywords=$KEYWORDS" >> $GITHUB_OUTPUT
+
+      - name: Build public/ (HTML + JSON-LD + robots/sitemap)
+        run: |
+          mkdir -p public/assets
+          # copy your logo if present at repo root (logo.svg) or assets path
+          if [ -f logo.svg ]; then cp logo.svg public/assets/logo.svg; fi
+          if [ -f public/assets/logo.svg ]; then IMG="./assets/logo.svg"; else IMG=""; fi
+
+          # manifest.jsonld — simple pass-through as CreativeWork using manifest fields
+          jq -n --arg id "thinkaloud-goldstack" \
+                --arg name "${{ steps.mf.outputs.title }}" \
+                --arg desc "${{ steps.mf.outputs.desc }}" \
+                --arg ver "${{ steps.mf.outputs.ver }}" \
+                --arg url "${{ steps.mf.outputs.web }}" \
+                --argjson keywords "$(jq '.keywords' manifest.master.json)" '
+            {
+              "@context":"https://schema.org",
+              "@type":"CreativeWork",
+              "id":$id,
+              "name":$name,
+              "headline":$name,
+              "description":$desc,
+              "version":$ver,
+              "url":$url,
+              "mainEntityOfPage":$url,
+              "keywords":$keywords
+            }' > public/manifest.jsonld
+
+          # index.html (minimal but SEO + JSON-LD embedded)
+          cat > public/index.html <<HTML
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8"/>
+            <meta name="viewport" content="width=device-width,initial-scale=1"/>
+            <title>${{ steps.mf.outputs.title }}</title>
+            <meta name="description" content="${{ steps.mf.outputs.desc }}"/>
+            <meta name="keywords" content="${{ steps.mf.outputs.keywords }}"/>
+            <link rel="canonical" href="${{ steps.mf.outputs.web }}"/>
+            <meta property="og:type" content="website"/>
+            <meta property="og:title" content="${{ steps.mf.outputs.title }}"/>
+            <meta property="og:description" content="${{ steps.mf.outputs.desc }}"/>
+            <meta property="og:url" content="${{ steps.mf.outputs.web }}"/>
+            ${IMG:+<meta property="og:image" content="./assets/logo.svg"/>}
+            <meta name="twitter:card" content="summary_large_image"/>
+            ${IMG:+<meta name="twitter:image" content="./assets/logo.svg"/>}
+            <script type="application/ld+json">$(cat public/manifest.jsonld)</script>
+            <style>
+              body{font-family:ui-sans-serif,system-ui;line-height:1.6;background:#f7f8fb;color:#111}
+              header{background:#0b1020;color:#fff;padding:3rem 1rem;border-bottom:1px solid #0e1530}
+              .container{max-width:860px;margin:0 auto;padding:0 1rem}
+              .hero{display:flex;gap:1rem;align-items:center}
+              img.logo{width:64px;height:64px;border-radius:12px}
+              .pill{background:#eef2ff;color:#3730a3;border:1px solid #e0e7ff;border-radius:999px;padding:.25rem .6rem;font-size:.85rem}
+              .card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:1.25rem;box-shadow:0 10px 20px rgba(11,16,32,.05)}
+            </style>
+          </head>
+          <body>
+            <header>
+              <div class="container hero">
+                ${IMG:+<img class="logo" src="./assets/logo.svg" alt="Gold Stack logo"/>}
+                <div>
+                  <h1>${{ steps.mf.outputs.title }}</h1>
+                  <p>${{ steps.mf.outputs.desc }}</p>
+                  <div class="pill">Version ${{ steps.mf.outputs.ver }}</div>
+                </div>
+              </div>
+            </header>
+            <main class="container">
+              <div class="card">
+                <h2>What’s Inside</h2>
+                <ul>
+                  <li>Values & Goals</li>
+                  <li>Stack Components</li>
+                  <li>Interfaces (API + Agent Hooks)</li>
+                  <li>Use Cases</li>
+                </ul>
+                <p>Full JSON-LD is embedded and available as a standalone file.</p>
+                <p><a href="./manifest.jsonld">Download manifest.jsonld</a></p>
+              </div>
+            </main>
+          </body>
+          </html>
+          HTML
+
+          # robots.txt + sitemap.xml
+          echo -e "User-agent: *\nAllow: /\nSitemap: ${{ steps.mf.outputs.web }}sitemap.xml" > public/robots.txt
+          cat > public/sitemap.xml <<XML
+          <?xml version="1.0" encoding="UTF-8"?>
+          <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+            <url><loc>${{ steps.mf.outputs.web }}</loc></url>
+            <url><loc>${{ steps.mf.outputs.web }}manifest.jsonld</loc></url>
+          </urlset>
+          XML
+
+      - name: Pin public/ to Pinata (wrapped directory)
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+        run: |
+          mkdir -p upload && cp -r public upload/public
+          FILE_ARGS=$(find upload -type f -printf " -F file=@%p;filename=%p")
+          curl -s -X POST "https://api.pinata.cloud/pinning/pinFileToIPFS" \
+            -H "Authorization: Bearer $PINATA_JWT" \
+            -H "Accept: application/json" \
+            -F 'pinataOptions={"wrapWithDirectory": true}' \
+            $FILE_ARGS | tee pin.json
+          CID=$(jq -r '.IpfsHash' pin.json)
+          echo "CID=$CID" >> $GITHUB_ENV
+
+      - name: Update versions.json
+        run: |
+          CID="${{ env.CID }}"
+          SHA="${{ github.sha }}"
+          VER="${{ steps.mf.outputs.ver }}"
+          test -f versions.json || echo '[]' > versions.json
+          jq ". + [{\"version\":\"$VER\",\"git\":\"$SHA\",\"cid\":\"$CID\",\"date\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]" \
+            versions.json > versions.new.json
+          mv versions.new.json versions.json
+
+      - name: Update project.status.json
+        run: |
+          CID="${{ env.CID }}"
+          SHA="${{ github.sha }}"
+          DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          test -f project.status.json || echo '{}' > project.status.json
+          jq \
+            --arg cid "$CID" \
+            --arg sha "$SHA" \
+            --arg date "$DATE" \
+            --arg ver "${{ steps.mf.outputs.ver }}" \
+            '.version=$ver
+             | .git.branch = "main"
+             | .git.sha = $sha
+             | .git.last_commit = $date
+             | .deploy.cid_latest = $cid
+             | .deploy.gateway = ("https://ipfs.io/ipfs/"+$cid+"/index.html")' \
+            project.status.json > project.status.new.json
+          mv project.status.new.json project.status.json
+
+      - name: Commit status files
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add versions.json project.status.json
+          git commit -m "chore: release — CID ${{ env.CID }}" || echo "No changes to commit"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Comment CID on commit
+        uses: peter-evans/commit-comment@v3
+        with:
+          body: "Pinned **public/** to IPFS. CID: ${{ env.CID }}\nGateway: https://ipfs.io/ipfs/${{ env.CID }}/index.html"
