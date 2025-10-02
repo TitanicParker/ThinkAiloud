@@ -1,0 +1,110 @@
+name: release
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write        # to commit versions.json / project.status.json
+  pages: write           # to deploy to GitHub Pages
+  id-token: write        # required for pages OIDC
+
+concurrency:
+  group: pages-release
+  cancel-in-progress: false
+
+jobs:
+  build-pin-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: |
+          npm i mustache ajv ajv-formats
+
+      - name: Build site (HTML + JSON-LD + robots/sitemap)
+        run: |
+          node ./scripts/build.mjs
+
+      - name: SEO checks (OG/Twitter/keywords presence)
+        run: |
+          node ./scripts/checks.mjs
+
+      - name: Install utilities
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+
+      - name: Pin public/ to Pinata (wrapped directory)
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+        run: |
+          mkdir -p upload && cp -r public upload/public
+          FILE_ARGS=$(find upload -type f -printf " -F file=@%p;filename=%p")
+          curl -s -X POST "https://api.pinata.cloud/pinning/pinFileToIPFS" \
+            -H "Authorization: Bearer $PINATA_JWT" \
+            -H "Accept: application/json" \
+            -F 'pinataOptions={"wrapWithDirectory": true}' \
+            $FILE_ARGS | tee pin.json
+          jq -r '.IpfsHash' pin.json > cid.txt
+          echo "CID=$(cat cid.txt)" >> $GITHUB_ENV
+
+      - name: Update versions.json
+        run: |
+          CID="${{ env.CID }}"
+          SHA="${{ github.sha }}"
+          VERSION=$(jq -r .version src/manifest.master.json)
+          test -f versions.json || echo '[]' > versions.json
+          jq ". + [{\"version\":\"$VERSION\",\"git\":\"$SHA\",\"cid\":\"$CID\",\"date\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}]" \
+            versions.json > versions.new.json
+          mv versions.new.json versions.json
+
+      - name: Update project.status.json
+        run: |
+          CID="${{ env.CID }}"
+          SHA="${{ github.sha }}"
+          DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # ensure file exists
+          test -f project.status.json || echo '{}' > project.status.json
+          # inject/refresh fields based on current manifest + CID/SHA/time
+          jq \
+            --arg cid "$CID" \
+            --arg sha "$SHA" \
+            --arg date "$DATE" \
+            --arg ver "$(jq -r .version src/manifest.master.json)" \
+            '.version=$ver
+             | .git.branch = "main"
+             | .git.sha = $sha
+             | .git.last_commit = $date
+             | .deploy.cid_latest = $cid
+             | .deploy.gateway = ("https://ipfs.io/ipfs/"+$cid+"/index.html")' \
+            project.status.json > project.status.new.json
+          mv project.status.new.json project.status.json
+
+      - name: Commit status files
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add versions.json project.status.json
+          git commit -m "chore: release — CID ${{ env.CID }}" || echo "No changes to commit"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Comment CID on commit
+        uses: peter-evans/commit-comment@v3
+        with:
+          body: "Pinned **public/** to IPFS. CID: ${{ env.CID }}\nGateway: https://ipfs.io/ipfs/${{ env.CID }}/index.html"
