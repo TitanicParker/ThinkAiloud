@@ -1,0 +1,151 @@
+{
+  "id": "thinkaloud-goldstack-manifest-v1",
+  "version": "1.1.0",
+  "title": "ThinkAloud \u2014 The Gold Stack Manifest",
+  "description": "An open constitution for decentralized AI infrastructure: compute, storage, connectivity, governance, data.",
+  "belief": {
+    "statement": "We believe in a resilient, decentralized, and intelligible intelligence stack. It is not inevitable; it is possible. We act on that possibility.",
+    "origin": "2025-10-02T00:00:00Z",
+    "status": "active",
+    "intended_audience": [
+      "protocol stewards",
+      "DAO members",
+      "infra architects",
+      "human-aligned agents"
+    ],
+    "type": "first-principle"
+  },
+  "vision": "Open, resilient, and sovereign intelligence infrastructure built by many, safe from collapse.",
+  "mission": "Coordinate incentives, alignment, and growth across decentralized compute, storage, connectivity, governance, and data.",
+  "values": {
+    "resilience": "Prefer modular, repairable, fallback systems over brittle perfection.",
+    "clarity": "Encode core commitments plainly; leave ambiguity where meaning demands it.",
+    "permissionless": "Allow forking, extension, and remixing.",
+    "integrity": "Ensure verifiable, tamper-evident, versioned authenticity.",
+    "coordination_not_control": "Guide behavior without seizing power.",
+    "actionable": "Include interfaces, triggers, and execution paths."
+  },
+  "stack_components": {
+    "connectivity": {
+      "protocols": [
+        "Helium (HNT)"
+      ],
+      "description": "Community wireless/LoRa for edge \u2192 AI fabric."
+    },
+    "compute": {
+      "protocols": [
+        "Akash (AKT)",
+        "Render (RNDR)",
+        "Bittensor (TAO)"
+      ],
+      "description": "Distributed GPU/CPU for inference/training/validation."
+    },
+    "storage": {
+      "protocols": [
+        "Filecoin (FIL)",
+        "IPFS",
+        "Arweave"
+      ],
+      "description": "Weights, checkpoints, datasets."
+    },
+    "data_market": {
+      "protocols": [
+        "Ocean Protocol (OCEAN)"
+      ],
+      "description": "Tokenized datasets, compute\u2011to\u2011data, privacy controls."
+    },
+    "governance_models": {
+      "protocols": [
+        "DAOs",
+        "Proof\u2011of\u2011Compute frameworks"
+      ],
+      "description": "Upgrades, rewards, slashing, emergent alignment."
+    }
+  },
+  "interfaces": {
+    "api_endpoints": [
+      {
+        "name": "ManifestFetch",
+        "path": "/manifest/v1",
+        "method": "GET",
+        "returns": "This full JSON manifest"
+      },
+      {
+        "name": "VersionHistory",
+        "path": "/manifest/versions",
+        "method": "GET",
+        "returns": "List of past versions with commit hashes"
+      }
+    ],
+    "agent_hooks": [
+      {
+        "name": "SelectCompute",
+        "description": "Given a compute task, return candidate protocol endpoints and cost.",
+        "signature": {
+          "input": {
+            "task": "ComputeDescriptor"
+          },
+          "output": {
+            "candidates": "Array<ComputeEndpoint>"
+          }
+        }
+      },
+      {
+        "name": "ProposeExtension",
+        "description": "Propose a new stack component or protocol.",
+        "signature": {
+          "input": {
+            "proposal": "ComponentProposal"
+          },
+          "output": {
+            "accepted": "Boolean",
+            "hash": "CommitHash"
+          }
+        }
+      }
+    ]
+  },
+  "use_cases": [
+    {
+      "name": "Protocol Alignment",
+      "description": "Protocols adopt this manifest as a base reference."
+    },
+    {
+      "name": "DAO Seed",
+      "description": "Use as a founding constitution for a multi\u2011protocol DAO."
+    },
+    {
+      "name": "Agent Planning",
+      "description": "Agents parse to route tasks, stake, and expand."
+    },
+    {
+      "name": "Index Construction",
+      "description": "Build thematic baskets based on component weights and roles."
+    },
+    {
+      "name": "Versioned Evolution",
+      "description": "Fork or extend via democratic processes."
+    }
+  ],
+  "keywords": [
+    "AI Valley",
+    "Decentralized AI",
+    "Web3 AI",
+    "Akash",
+    "Render",
+    "Filecoin",
+    "Ocean Protocol",
+    "Bittensor",
+    "Helium",
+    "IPFS",
+    "Arweave",
+    "DAO infrastructure",
+    "decentralized compute"
+  ],
+  "links": {
+    "web": "https://titanicparker.github.io/thinkaloud-goldstack/",
+    "manifest_jsonld": "https://titanicparker.github.io/thinkaloud-goldstack/manifest.jsonld",
+    "ipfs": "ipfs://<CID>/index.html",
+    "ipfs_gateway": "https://ipfs.io/ipfs/<CID>/index.html"
+  }
+}

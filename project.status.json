@@ -1,0 +1,40 @@
+{
+  "project": "ThinkAloud Gold Stack Initiative",
+  "manifest_id": "thinkaloud-goldstack-manifest-v1",
+  "version": "1.1.0",
+  "git": {
+    "branch": "main",
+    "sha": "<populated-by-CI>",
+    "last_commit": "<ISO8601>"
+  },
+  "deploy": {
+    "web": "https://titanicparker.github.io/thinkaloud-goldstack/",
+    "cid_latest": "<populated-by-CI>",
+    "gateway": "https://ipfs.io/ipfs/<populated-by-CI>/index.html"
+  },
+  "tasks": [
+    {
+      "id": "task-002",
+      "title": "Design DAO Constitution Proposal",
+      "status": "todo",
+      "priority": "medium"
+    },
+    {
+      "id": "task-004",
+      "title": "Create versioning protocol for the manifest",
+      "status": "in_progress",
+      "priority": "high"
+    },
+    {
+      "id": "task-005",
+      "title": "Recruit protocol teams",
+      "status": "todo",
+      "priority": "high"
+    }
+  ],
+  "metrics": {
+    "backlinks": 0,
+    "mentions": 0,
+    "last_check": "<ISO8601>"
+  }
+}
