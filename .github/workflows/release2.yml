@@ -1,0 +1,109 @@
+      - name: Build public/ (HTML + JSON-LD + robots/sitemap)
+        run: |
+          mkdir -p public/assets
+          # copy your logo if present at repo root
+          if [ -f logo.svg ]; then cp logo.svg public/assets/logo.svg; fi
+          IMG=""
+          if [ -f public/assets/logo.svg ]; then IMG="./assets/logo.svg"; fi
+
+          # manifest.jsonld
+          jq -n --arg id "thinkaloud-goldstack" \
+                --arg name "${{ steps.mf.outputs.title }}" \
+                --arg desc "${{ steps.mf.outputs.desc }}" \
+                --arg ver "${{ steps.mf.outputs.ver }}" \
+                --arg url "${{ steps.mf.outputs.web }}" \
+                --argjson keywords "$(jq '.keywords' manifest.master.json)" '
+            {"@context":"https://schema.org","@type":"CreativeWork","id":$id,
+             "name":$name,"headline":$name,"description":$desc,"version":$ver,
+             "url":$url,"mainEntityOfPage":$url,"keywords":$keywords}' > public/manifest.jsonld
+
+          # index.html (upgraded)
+          cat > public/index.html <<HTML
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8"/>
+            <meta name="viewport" content="width=device-width,initial-scale=1"/>
+            <title>${{ steps.mf.outputs.title }}</title>
+            <meta name="description" content="${{ steps.mf.outputs.desc }}"/>
+            <meta name="keywords" content="${{ steps.mf.outputs.keywords }}"/>
+            <link rel="canonical" href="${{ steps.mf.outputs.web }}"/>
+            <link rel="icon" href="${IMG:-./assets/logo.svg}" type="image/svg+xml"/>
+            <meta name="theme-color" content="#0b1020"/>
+
+            <meta property="og:type" content="website"/>
+            <meta property="og:site_name" content="ThinkAloud"/>
+            <meta property="og:title" content="${{ steps.mf.outputs.title }}"/>
+            <meta property="og:description" content="${{ steps.mf.outputs.desc }}"/>
+            <meta property="og:url" content="${{ steps.mf.outputs.web }}"/>
+            ${IMG:+<meta property="og:image" content="./assets/logo.svg"/>}
+            ${IMG:+<meta property="og:image:alt" content="ThinkAloud Gold Stack logo"/>}
+
+            <meta name="twitter:card" content="summary_large_image"/>
+            <meta name="twitter:creator" content="@ThinkAloudAI"/>
+            ${IMG:+<meta name="twitter:image" content="./assets/logo.svg"/>}
+
+            <script type="application/ld+json">$(cat public/manifest.jsonld)</script>
+            <style>
+              :root{--ink:#0f172a;--muted:#475569;--bg:#0b1020;--card:#fff;--border:#e5e7eb;--accent:#d6b25b}
+              *{box-sizing:border-box}
+              body{font-family:ui-sans-serif,system-ui,Inter,Roboto;line-height:1.6;color:var(--ink);background:#f7f8fb;margin:0}
+              .container{max-width:960px;margin:0 auto;padding:0 1rem}
+              header{background:radial-gradient(1200px 600px at 10% -10%,#1b2560 0%,#0b1020 50%,#0b1020 100%);color:#fff;border-bottom:1px solid #0e1530}
+              .hero{display:flex;gap:1rem;align-items:center;padding:2.75rem 0}
+              .logo{width:56px;height:56px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+              h1{margin:0;font-size:clamp(1.8rem,2.6vw,2.4rem)}
+              .lede{margin:.5rem 0 0;color:#e7eaf6;max-width:70ch}
+              .pill{display:inline-block;margin-top:.8rem;background:#10172d;border:1px solid rgba(255,255,255,.15);color:#e9ecf8;border-radius:999px;padding:.35rem .65rem;font-size:.9rem}
+              main{padding:1.5rem 0 3rem}
+              .card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:1.25rem;box-shadow:0 10px 22px rgba(11,16,32,.06)}
+              h2{margin:.2rem 0 1rem;font-size:1.25rem}
+              .cta{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1rem}
+              .btn{display:inline-block;text-decoration:none;border-radius:12px;padding:.6rem .9rem;border:1px solid #0f172a;background:#111827;color:#fff}
+              .btn.secondary{background:#fff;color:#111827;border:1px solid #cbd5e1}
+              footer{color:var(--muted);font-size:.95rem;margin:2rem 0 1.5rem}
+            </style>
+          </head>
+          <body>
+            <header>
+              <div class="container hero">
+                ${IMG:+<img class="logo" src="./assets/logo.svg" alt="Gold Stack logo"/>}
+                <div>
+                  <h1>${{ steps.mf.outputs.title }}</h1>
+                  <p class="lede">${{ steps.mf.outputs.desc }}</p>
+                  <div class="pill">Version ${{ steps.mf.outputs.ver }}</div>
+                </div>
+              </div>
+            </header>
+            <main class="container">
+              <div class="card">
+                <h2>What’s Inside</h2>
+                <ul>
+                  <li>Values &amp; Goals</li>
+                  <li>Stack Components</li>
+                  <li>Interfaces (API + Agent Hooks)</li>
+                  <li>Use Cases</li>
+                </ul>
+                <p>Full JSON-LD is embedded in this page and available as a standalone file.</p>
+                <div class="cta">
+                  <a class="btn" href="./manifest.jsonld">Download JSON-LD</a>
+                  <a class="btn secondary" href="https://github.com/${{ github.repository }}">View on GitHub</a>
+                  <a class="btn secondary" href="./../versions.json">Versions</a>
+                  <a class="btn secondary" href="./../project.status.json">Status</a>
+                </div>
+              </div>
+              <footer>© ThinkAloud — Gold Stack Manifest.</footer>
+            </main>
+          </body>
+          </html>
+          HTML
+
+          # robots.txt + sitemap.xml
+          echo -e "User-agent: *\nAllow: /\nSitemap: ${{ steps.mf.outputs.web }}sitemap.xml" > public/robots.txt
+          cat > public/sitemap.xml <<XML
+          <?xml version="1.0" encoding="UTF-8"?>
+          <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+            <url><loc>${{ steps.mf.outputs.web }}</loc></url>
+            <url><loc>${{ steps.mf.outputs.web }}manifest.jsonld</loc></url>
+          </urlset>
+          XML
